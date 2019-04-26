@@ -23,7 +23,7 @@ type Model = { Counter: Counter option }
 type Msg =
 | Increment
 | Decrement
-| InitialCountLoaded of Counter
+| InitialCountLoaded of Result<Counter, exn>
 
 
 
@@ -50,9 +50,10 @@ let init () : Model =
 
 let loadCount =
     AsyncRx.ofPromise (initialCounter [])
-    |> AsyncRx.map InitialCountLoaded
+    |> AsyncRx.map (Ok >> InitialCountLoaded)
+    |> AsyncRx.catch (Error >> InitialCountLoaded >> AsyncRx.single)
 
-let query msgs = AsyncRx.concat loadCount msgs
+let query msgs = loadCount ++ msgs
 
 // The update function computes the next state of the application based on the current state and the incoming events/messages
 let update (msg : Msg) (currentModel : Model) : Model =
@@ -61,7 +62,7 @@ let update (msg : Msg) (currentModel : Model) : Model =
         { currentModel with Counter = Some { Value = counter.Value + 1 } }
     | Some counter, Decrement ->
         { currentModel with Counter = Some { Value = counter.Value - 1 } }
-    | _, InitialCountLoaded initialCount ->
+    | _, InitialCountLoaded (Ok initialCount) ->
         { Counter = Some initialCount }
     | _ -> currentModel
 
