@@ -10,7 +10,6 @@ open Thoth.Json
 
 open Shared
 
-open Fable.Reaction
 open Reaction
 
 // The model holds data that you want to keep track of while the application is running
@@ -49,17 +48,11 @@ let initialCounter = fetchAs<Counter> "/api/init"
 let init () : Model =
     { Counter = None }
 
-let load = ofPromise (initialCounter [])
-
 let loadCount =
-    load
-    |> AsyncObservable.map (Ok >> InitialCountLoaded)
-    |> AsyncObservable.catch (Error >> InitialCountLoaded >> AsyncObservable.single)
+    AsyncRx.ofPromise (initialCounter [])
+    |> AsyncRx.map InitialCountLoaded
 
-let query msgs =
-    AsyncObservable.concat
-        [ loadCount
-          msgs ]
+let query msgs = AsyncRx.concat loadCount msgs
 
 // The update function computes the next state of the application based on the current state and the incoming events/messages
 let update (msg : Msg) (currentModel : Model) : Model =
