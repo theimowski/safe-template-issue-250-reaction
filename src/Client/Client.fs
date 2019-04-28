@@ -10,13 +10,18 @@ open Thoth.Json
 
 open Shared
 
-open Reaction
+open FSharp.Control
+open Elmish.Streams
 
-// The model holds data that you want to keep track of while the application is running
-// in this case, we are keeping track of a counter
-// we mark it as optional, because initially it will not be available from the client
-// the initial value will be requested from server
-type Model = { Counter: Counter option }
+// The application model holds data that you want to keep track of while the
+// application is running in this case, we are keeping track of a counter.
+// Initially the model will not be available, so we add it together with a case
+// that tells if we are currently loading.
+type AppModel = { Counter: Counter }
+
+type Model =
+    | App of AppModel
+    | Loading
 
 // The Msg type defines what events/actions can occur while the application is running
 // the state of the application changes *only* in reaction to these events
@@ -46,24 +51,31 @@ let initialCounter = fetchAs<Counter> "/api/init"
 
 // defines the initial state
 let init () : Model =
-    { Counter = None }
+    Loading
 
 let loadCount =
     AsyncRx.ofPromise (initialCounter [])
     |> AsyncRx.map (Ok >> InitialCountLoaded)
     |> AsyncRx.catch (Error >> InitialCountLoaded >> AsyncRx.single)
+    |> AsyncRx.toStream "loading"
 
-let query msgs = loadCount ++ msgs
+let stream model msgs =
+    match model with
+    | Loading -> loadCount
+    | _ -> msgs
 
 // The update function computes the next state of the application based on the current state and the incoming events/messages
 let update (msg : Msg) (currentModel : Model) : Model =
-    match currentModel.Counter, msg with
-    | Some counter, Increment ->
-        { currentModel with Counter = Some { Value = counter.Value + 1 } }
-    | Some counter, Decrement ->
-        { currentModel with Counter = Some { Value = counter.Value - 1 } }
-    | _, InitialCountLoaded (Ok initialCount) ->
-        { Counter = Some initialCount }
+    match currentModel, msg with
+    | Loading, InitialCountLoaded (Ok initialCount) ->
+        App { Counter = initialCount }
+    | App model, msg ->
+        match model.Counter, msg with
+        | counter, Increment ->
+            App { model with Counter = { Value = counter.Value + 1 } }
+        | counter, Decrement ->
+            App { model with Counter = { Value = counter.Value - 1 } }
+        | _ -> currentModel
     | _ -> currentModel
 
 
@@ -79,7 +91,7 @@ let safeComponents =
              str ", "
              a [ Href "https://fulma.github.io/Fulma" ] [ str "Fulma" ]
              str ", "
-             a [ Href "https://dbrattli.github.io/Reaction/" ] [ str "Fable.Reaction" ]
+             a [ Href "http://elmish-streams.rtfd.io/" ] [ str "Elmish.Streams" ]
            ]
 
     span [ ]
@@ -88,8 +100,8 @@ let safeComponents =
           components ]
 
 let show = function
-| { Counter = Some counter } -> string counter.Value
-| { Counter = None   } -> "Loading..."
+| App { Counter = counter } -> string counter.Value
+| Loading -> "Loading..."
 
 let button txt onClick =
     Button.button
@@ -122,7 +134,7 @@ open Elmish.HMR
 #endif
 
 Program.mkSimple init update view
-|> Program.withQuery query
+|> Program.withStream stream "msgs"
 #if DEBUG
 |> Program.withConsoleTrace
 #endif
