@@ -3,7 +3,7 @@ group Client
     Fable.Core
     Fable.Elmish.Debugger
     Fable.Elmish.React
-    Fable.Elmish.Reaction
+    Fable.Elmish.Streams
     Fable.Elmish.HMR
     Fable.Fetch
     Fulma
